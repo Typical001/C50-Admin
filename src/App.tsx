@@ -1,5 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from './lib/supabaseClient';
+import type { Session, User } from '@supabase/supabase-js';
+import { createVerificationGate } from './lib/adminSession';
 import Login from './components/Login';
 import Dashboard from './components/Dashboard';
 import BatchesCMS from './components/BatchesCMS';
@@ -10,62 +12,114 @@ import { LayoutDashboard, BookOpen, GraduationCap, Sparkles, LogOut, User as Use
 type AdminView = 'dashboard' | 'batches' | 'syllabus' | 'homepage';
 
 export default function App() {
-  const [sessionUser, setSessionUser] = useState<any>(null);
+  const [sessionUser, setSessionUser] = useState<(User & { name: string }) | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeView, setActiveView] = useState<AdminView>('dashboard');
   const [selectedBatchIdForSyllabus, setSelectedBatchIdForSyllabus] = useState<string | undefined>(undefined);
 
-  useEffect(() => {
-    // Check initial session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session?.user) {
-        verifyAdminAndSet(session.user);
-      } else {
-        setLoading(false);
-      }
-    });
-
-    // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session?.user) {
-        verifyAdminAndSet(session.user);
-      } else {
-        setSessionUser(null);
-        setLoading(false);
-      }
-    });
-
-    return () => subscription.unsubscribe();
-  }, []);
-
-  const verifyAdminAndSet = async (user: any) => {
-    try {
-      const { data: profile, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', user.id)
-        .single();
-
-      if (error || profile?.role !== 'admin') {
-        await supabase.auth.signOut();
-        setSessionUser(null);
-      } else {
-        setSessionUser({
-          ...user,
-          name: profile.name || user.email,
-        });
-      }
-    } catch (err) {
-      console.error(err);
-      setSessionUser(null);
-    } finally {
-      setLoading(false);
-    }
+  const [authError, setAuthError] = useState('');
+  const gate = useRef(createVerificationGate());
+  const blocked = useRef(false);
+  const mounted = useRef(false);
+  const controller = useRef<AbortController | null>(null);
+  const lock = () => {
+    blocked.current = true;
+    sessionStorage.setItem('c50-admin-signed-out', '1');
+    gate.current.invalidate();
+    controller.current?.abort();
   };
 
+  const verify = useCallback(async (session: Session | null, ticket: number) => {
+    const current = () => mounted.current && gate.current.isCurrent(ticket) && !blocked.current;
+    if (!current()) return;
+    if (!session) { setLoading(false); return; }
+    const abort = new AbortController();
+    controller.current = abort;
+    const timer = setTimeout(() => {
+      if (!current()) return;
+      gate.current.invalidate(); abort.abort();
+      setSessionUser(null); setLoading(false);
+      setAuthError('Session verification timed out. Please sign in again.');
+    }, 15000);
+    try {
+      const { data: { user }, error } = await supabase.auth.getUser(session.access_token);
+      if (!current()) return;
+      if (error || !user || user.id !== session.user.id) throw new Error('denied');
+      const { data: profile, error: profileError } = await supabase.from('profiles')
+        .select('id,role,name').eq('id', user.id).abortSignal(abort.signal).single();
+      if (!current()) return;
+      const latest = await supabase.auth.getSession();
+      if (!current()) return;
+      if (profileError || profile?.role !== 'admin' || latest.error ||
+          latest.data.session?.access_token !== session.access_token) throw new Error('denied');
+      setAuthError('');
+      setSessionUser({ ...user, name: profile.name || user.email || 'Administrator' });
+    } catch {
+      if (!current()) return;
+      setSessionUser(null);
+      setAuthError('Unable to authorize this session. Sign in with an administrator account.');
+      // Do not perform a delayed signOut here: it could revoke a newer login.
+    } finally {
+      clearTimeout(timer);
+      if (current()) setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    const verificationGate = gate.current;
+    mounted.current = true;
+    blocked.current = sessionStorage.getItem('c50-admin-signed-out') === '1';
+    let scheduled: ReturnType<typeof setTimeout>;
+    const schedule = (session: Session | null) => {
+      const ticket = gate.current.invalidate();
+      controller.current?.abort();
+      clearTimeout(scheduled);
+      setSessionUser(null);
+      setLoading(!!session && !blocked.current);
+      if (!session || blocked.current) return;
+      // Leave the Supabase auth callback before making further auth calls.
+      scheduled = setTimeout(() => { void verify(session, ticket); }, 0);
+    };
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      schedule(session);
+    });
+    const initial = gate.current.invalidate();
+    void supabase.auth.getSession().then(({ data, error }) => {
+      if (!mounted.current || !gate.current.isCurrent(initial)) return;
+      if (error) { setAuthError('Unable to restore session. Please sign in.'); setLoading(false); }
+      else schedule(data.session);
+    }).catch(() => { if (mounted.current && gate.current.isCurrent(initial)) setLoading(false); });
+    const refresh = () => {
+      if (document.visibilityState === 'visible' && !blocked.current) {
+        const ticket = gate.current.invalidate();
+        controller.current?.abort(); setSessionUser(null); setLoading(true);
+        void supabase.auth.getSession().then(({ data }) => {
+          if (mounted.current && gate.current.isCurrent(ticket)) schedule(data.session);
+        }).catch(() => { if (mounted.current && gate.current.isCurrent(ticket)) setLoading(false); });
+      }
+    };
+    document.addEventListener('visibilitychange', refresh);
+    return () => {
+      mounted.current = false; verificationGate.invalidate(); controller.current?.abort();
+      clearTimeout(scheduled); subscription.unsubscribe();
+      document.removeEventListener('visibilitychange', refresh);
+    };
+  }, [verify]);
+
   const handleLogout = async () => {
-    await supabase.auth.signOut();
-    setSessionUser(null);
+    lock(); setSessionUser(null); setLoading(false);
+    setActiveView('dashboard'); setSelectedBatchIdForSyllabus(undefined);
+    try {
+      const { error } = await supabase.auth.signOut({ scope: 'local' });
+      if (error) throw error;
+      setAuthError('');
+    } catch { setAuthError('This panel is locked. Server sign-out could not be confirmed; reconnect and sign in again.'); }
+  };
+  const prepareLogin = () => {
+    gate.current.invalidate(); controller.current?.abort();
+    blocked.current = false; sessionStorage.removeItem('c50-admin-signed-out');
+    setSessionUser(null); setAuthError('');
+    setActiveView('dashboard'); setSelectedBatchIdForSyllabus(undefined);
   };
 
   if (loading) {
@@ -77,7 +131,7 @@ export default function App() {
   }
 
   if (!sessionUser) {
-    return <Login onLoginSuccess={verifyAdminAndSet} />;
+    return <Login onLoginStart={prepareLogin} sessionError={authError} />;
   }
 
   const menuItems = [

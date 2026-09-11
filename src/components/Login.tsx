@@ -1,12 +1,14 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import { ShieldAlert, KeyRound, Mail, Sparkles } from 'lucide-react';
 
 interface LoginProps {
-  onLoginSuccess: (user: any) => void;
+  onLoginStart: () => void;
+  sessionError: string;
 }
 
-export default function Login({ onLoginSuccess }: LoginProps) {
+export default function Login({ onLoginStart, sessionError }: LoginProps) {
+  const submitting = useRef(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -14,6 +16,9 @@ export default function Login({ onLoginSuccess }: LoginProps) {
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (submitting.current) return;
+    submitting.current = true;
+    onLoginStart();
     setLoading(true);
     setError('');
 
@@ -26,27 +31,12 @@ export default function Login({ onLoginSuccess }: LoginProps) {
       if (authError) throw authError;
       if (!data.user) throw new Error('No user data returned');
 
-      // Verify if user is admin
-      const { data: profile, error: profileError } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', data.user.id)
-        .single();
-
-      if (profileError) {
-        throw new Error('Failed to retrieve profile record.');
-      }
-
-      if (profile?.role !== 'admin') {
-        await supabase.auth.signOut();
-        throw new Error('Access denied. Administrator credentials required.');
-      }
-
-      onLoginSuccess(data.user);
-    } catch (err: any) {
-      console.error('Login error:', err);
-      setError(err.message || 'Incorrect email/password or unauthorized access.');
+      // App owns verification; a successful password response alone grants no CMS access.
+    } catch {
+      setError('Sign-in failed. Check your credentials and connection, then try again.');
     } finally {
+      submitting.current = false;
+      setPassword('');
       setLoading(false);
     }
   };
@@ -66,10 +56,10 @@ export default function Login({ onLoginSuccess }: LoginProps) {
           <p className="text-gray-400 text-sm mt-1">Authenticate to manage batches and homepage content</p>
         </div>
 
-        {error && (
+        {(error || sessionError) && (
           <div className="mb-6 p-4 bg-red-50 border border-red-100 text-red-700 text-xs rounded-2xl flex items-start gap-2.5">
             <ShieldAlert className="w-4 h-4 shrink-0 mt-0.5" />
-            <span>{error}</span>
+            <span role="alert">{error || sessionError}</span>
           </div>
         )}
 
@@ -82,9 +72,11 @@ export default function Login({ onLoginSuccess }: LoginProps) {
               </span>
               <input
                 type="email"
+                autoComplete="username"
+                disabled={loading}
                 required
                 className="w-full pl-10 pr-4 py-3 bg-gray-50/50 focus:bg-white border border-gray-100 focus:border-indigo-500 rounded-2xl text-sm focus:outline-none transition-all"
-                placeholder="admin@carrier50.com"
+                placeholder="Your administrator email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
               />
@@ -99,6 +91,8 @@ export default function Login({ onLoginSuccess }: LoginProps) {
               </span>
               <input
                 type="password"
+                autoComplete="current-password"
+                disabled={loading}
                 required
                 className="w-full pl-10 pr-4 py-3 bg-gray-50/50 focus:bg-white border border-gray-100 focus:border-indigo-500 rounded-2xl text-sm focus:outline-none transition-all"
                 placeholder="••••••••"
@@ -117,11 +111,7 @@ export default function Login({ onLoginSuccess }: LoginProps) {
           </button>
         </form>
 
-        <div className="mt-8 text-center border-t border-gray-50 pt-6">
-          <p className="text-gray-400 text-xs">
-            Demo credentials: <code className="bg-gray-50 px-1.5 py-0.5 rounded font-mono text-gray-600">admin@carrier50.com</code> / <code className="bg-gray-50 px-1.5 py-0.5 rounded font-mono text-gray-600">admin123</code>
-          </p>
-        </div>
+        <p className="mt-6 text-center text-xs text-gray-500">Authorized administrators only.</p>
       </div>
     </div>
   );

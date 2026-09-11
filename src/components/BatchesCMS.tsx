@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import { Batch } from '../types';
+import BatchImageInput from './BatchImageInput';
 import PaymentButtonTest from './PaymentButtonTest';
 import BatchOverviewEditor from './BatchOverviewEditor';
 import { batchOverview } from '../lib/batchOverview';
@@ -35,6 +36,7 @@ export default function BatchesCMS({ onManageSyllabus }: BatchesCMSProps) {
 
   const [formError, setFormError] = useState('');
   const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
 
   useEffect(() => {
     fetchBatches();
@@ -129,6 +131,7 @@ export default function BatchesCMS({ onManageSyllabus }: BatchesCMSProps) {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (saving || uploading) return;
     setSaving(true);
     setFormError('');
 
@@ -310,6 +313,7 @@ export default function BatchesCMS({ onManageSyllabus }: BatchesCMSProps) {
                 {editBatch ? 'Edit Batch details' : 'Create New Batch'}
               </h2>
               <button
+                disabled={saving || uploading}
                 onClick={() => setModalOpen(false)}
                 className="p-1.5 hover:bg-gray-50 text-gray-400 hover:text-gray-600 rounded-xl transition-colors cursor-pointer"
               >
@@ -349,22 +353,9 @@ export default function BatchesCMS({ onManageSyllabus }: BatchesCMSProps) {
                 />
               </div>
 
-              <div>
-                <label className="block text-xs font-semibold text-gray-500 mb-1">Thumbnail Image URL</label>
-                <input
-                  type="text"
-                  placeholder="Unsplash image URL or path"
-                  className="w-full px-3.5 py-2.5 bg-gray-50/50 border border-gray-100 focus:border-indigo-500 rounded-xl text-sm focus:outline-none focus:bg-white"
-                  value={thumbnailUrl}
-                  onChange={(e) => setThumbnailUrl(e.target.value)}
-                />
-              </div>
-
-              <div className="flex items-center gap-3 py-2">
-                <label className="block w-full text-xs font-semibold text-gray-500">Banner Image URL (Android hero; blank uses thumbnail)
-                  <input type="url" pattern="https://.*" value={bannerUrl} onChange={e => setBannerUrl(e.target.value)} className="mt-1 w-full rounded-xl border p-2" placeholder="https://..." />
-                </label>
-              </div>
+              <BatchImageInput label="Thumbnail image" value={thumbnailUrl} onChange={setThumbnailUrl} disabled={saving || uploading} onBusy={setUploading} />
+              <BatchImageInput label="Banner image" value={bannerUrl} onChange={setBannerUrl} disabled={saving || uploading} onBusy={setUploading} />
+              <p className="text-xs text-gray-500">The Android overview uses the banner; clear its URL to use the thumbnail instead.</p>
               <label className="block text-xs font-semibold text-gray-500">Batch tag (optional)
                 <input value={customTag} onChange={e => setCustomTag(e.target.value)} maxLength={100} className="mt-1 w-full rounded-xl border p-2" />
               </label>
@@ -417,10 +408,10 @@ export default function BatchesCMS({ onManageSyllabus }: BatchesCMSProps) {
 
               <button
                 type="submit"
-                disabled={saving}
+                disabled={saving || uploading}
                 className="w-full mt-4 py-3 bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 disabled:bg-indigo-400 text-white font-semibold rounded-2xl text-sm shadow-md transition-colors cursor-pointer"
               >
-                {saving ? 'Saving...' : editBatch ? 'Update Batch Details' : 'Create Batch'}
+                {uploading ? 'Uploading image...' : saving ? 'Saving...' : editBatch ? 'Update Batch Details' : 'Create Batch'}
               </button>
             </form>
             {editBatch && !isFree && (Number(discountPrice) > 0 ? Number(discountPrice) : Number(price)) === 1000 &&
