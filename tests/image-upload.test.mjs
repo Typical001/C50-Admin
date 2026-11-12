@@ -9,7 +9,7 @@ test('device upload keeps validation, admin check and unique non-overwriting pat
 test('both image fields retain URLs and batch save waits for uploads', () => {
   assert.match(batch, /label="Thumbnail image"/);
   assert.match(batch, /label="Banner image"/);
-  assert.match(batch, /if \(saving \|\| uploading\) return/);
+  assert.match(batch, /if \(saveLock.current \|\| saving \|\| uploading\) return/);
   assert.match(source, /Save the batch/);
   assert.doesNotMatch(source, /\.remove\(/);
 });

@@ -4,12 +4,13 @@ import type { Session, User } from '@supabase/supabase-js';
 import { createVerificationGate } from './lib/adminSession';
 import Login from './components/Login';
 import Dashboard from './components/Dashboard';
+import PaymentsLedger from './components/PaymentsLedger';
 import BatchesCMS from './components/BatchesCMS';
 import SyllabusCMS from './components/SyllabusCMS';
 import HomepageCMS from './components/HomepageCMS';
 import { LayoutDashboard, BookOpen, GraduationCap, Sparkles, LogOut, User as UserIcon } from 'lucide-react';
 
-type AdminView = 'dashboard' | 'batches' | 'syllabus' | 'homepage';
+type AdminView = 'dashboard' | 'batches' | 'syllabus' | 'homepage' | 'tests' | 'payments';
 
 export default function App() {
   const [sessionUser, setSessionUser] = useState<(User & { name: string }) | null>(null);
@@ -138,6 +139,8 @@ export default function App() {
     { view: 'dashboard' as AdminView, label: 'Dashboard', icon: LayoutDashboard },
     { view: 'batches' as AdminView, label: 'Manage Batches', icon: BookOpen },
     { view: 'syllabus' as AdminView, label: 'Batch Content Manager', icon: GraduationCap },
+    { view: 'tests' as AdminView, label: 'Test Series', icon: BookOpen },
+    { view: 'payments' as AdminView, label: 'Payments', icon: BookOpen },
     { view: 'homepage' as AdminView, label: 'Homepage CMS', icon: Sparkles },
   ];
 
@@ -202,8 +205,8 @@ export default function App() {
       {/* Main Content Area */}
       <main className="flex-1 p-8 lg:p-10 max-h-screen overflow-y-auto">
         {activeView === 'dashboard' && <Dashboard />}
-        {activeView === 'batches' && (
-          <BatchesCMS 
+        {(activeView === 'batches' || activeView === 'tests') && (
+          <BatchesCMS key={activeView} testSeriesOnly={activeView === 'tests'}
             onManageSyllabus={(batchId) => {
               setSelectedBatchIdForSyllabus(batchId);
               setActiveView('syllabus');
@@ -214,6 +217,7 @@ export default function App() {
           <SyllabusCMS initialBatchId={selectedBatchIdForSyllabus} />
         )}
         {activeView === 'homepage' && <HomepageCMS />}
+        {activeView === 'payments' && <PaymentsLedger />}
       </main>
     </div>
   );

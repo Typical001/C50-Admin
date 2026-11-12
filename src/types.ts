@@ -10,6 +10,7 @@ export interface User {
 }
 
 export interface Batch {
+  catalogVisible?: boolean;
   overviewContent?: unknown;
   id: string;
   title: string;

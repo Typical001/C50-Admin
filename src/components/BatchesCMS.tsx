@@ -1,5 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { supabase } from '../lib/supabaseClient';
+import { isTestSeries, seriesTags } from '../lib/testSeries';
 import { Batch } from '../types';
 import BatchImageInput from './BatchImageInput';
 import PaymentButtonTest from './PaymentButtonTest';
@@ -8,16 +9,22 @@ import { batchOverview } from '../lib/batchOverview';
 import { Plus, Pencil, Trash2, X, AlertCircle, BookOpen } from 'lucide-react';
 
 interface BatchesCMSProps {
+  testSeriesOnly?: boolean;
   onManageSyllabus?: (batchId: string) => void;
 }
 
-export default function BatchesCMS({ onManageSyllabus }: BatchesCMSProps) {
+export default function BatchesCMS({ onManageSyllabus, testSeriesOnly = false }: BatchesCMSProps) {
+  const [previewBatch, setPreviewBatch] = useState<Batch | null>(null);
+  const requestVersion = useRef(0);
   const [batches, setBatches] = useState<Batch[]>([]);
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
   const [editBatch, setEditBatch] = useState<Batch | null>(null);
 
   // Form states
+  const [catalogVisible, setCatalogVisible] = useState(true);
+  const creationId = useRef(crypto.randomUUID());
+  const saveLock = useRef(false);
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [instructor, setInstructor] = useState('');
@@ -39,10 +46,12 @@ export default function BatchesCMS({ onManageSyllabus }: BatchesCMSProps) {
   const [uploading, setUploading] = useState(false);
 
   useEffect(() => {
-    fetchBatches();
-  }, []);
+    void fetchBatches();
+    return () => { requestVersion.current++; };
+  }, [testSeriesOnly]);
 
   const fetchBatches = async () => {
+    const version = ++requestVersion.current;
     try {
       setLoading(true);
       const { data, error } = await supabase
@@ -54,6 +63,7 @@ export default function BatchesCMS({ onManageSyllabus }: BatchesCMSProps) {
 
       const mapped = (data || []).map((b: any) => ({
         id: b.id,
+        catalogVisible: b.catalog_visible !== false,
         overviewContent: b.overview_content,
         rating: b.rating,
         title: b.title,
@@ -79,16 +89,20 @@ export default function BatchesCMS({ onManageSyllabus }: BatchesCMSProps) {
         customTag: b.custom_tag || ''
       }));
 
-      setBatches(mapped);
+      if (version !== requestVersion.current) return;
+      setFormError('');
+      setBatches(mapped.filter(b => isTestSeries(b) === testSeriesOnly));
     } catch (err) {
-      console.error('Failed to load batches:', err);
+      if (version === requestVersion.current) setFormError('Could not load the catalog. Please retry.');
     } finally {
-      setLoading(false);
+      if (version === requestVersion.current) setLoading(false);
     }
   };
 
   const handleOpenCreate = () => {
     setEditBatch(null);
+    creationId.current = crypto.randomUUID();
+    setCatalogVisible(!testSeriesOnly);
     setOverview(batchOverview(null, { duration: '6 Months', total_lectures: 0 }));
     setTitle('');
     setDescription('');
@@ -110,6 +124,7 @@ export default function BatchesCMS({ onManageSyllabus }: BatchesCMSProps) {
 
   const handleOpenEdit = (batch: Batch) => {
     setEditBatch(batch);
+    setCatalogVisible(batch.catalogVisible !== false);
     setOverview(batchOverview(batch.overviewContent, { duration: batch.duration, total_lectures: batch.totalLectures, rating: batch.rating }));
     setTitle(batch.title);
     setDescription(batch.description);
@@ -131,7 +146,7 @@ export default function BatchesCMS({ onManageSyllabus }: BatchesCMSProps) {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (saving || uploading) return;
+    if (saveLock.current || saving || uploading) return;
     setSaving(true);
     setFormError('');
 
@@ -141,20 +156,23 @@ export default function BatchesCMS({ onManageSyllabus }: BatchesCMSProps) {
       return;
     }
 
-    if (!Number.isFinite(Number(price)) || !Number.isFinite(Number(discountPrice)) || Number(price) < 0 || Number(discountPrice) < 0 ||
+    if (!Number.isFinite(Number(price)) || !Number.isFinite(Number(discountPrice)) || Number(price) < 0 || Number(discountPrice) < 0 || Number(discountPrice) > Number(price) ||
+      (testSeriesOnly && !isFree && Number(price) <= 0) ||
       (paymentEnabled && (isFree || (Number(discountPrice) > 0 ? Number(discountPrice) : Number(price)) <= 0)) ||
       (buttonId.trim() && !/^pl_[A-Za-z0-9]+$/.test(buttonId.trim()))) {
       setFormError('Use a positive price for enabled payments and a valid pl_ button ID, not HTML or a link.');
       setSaving(false); return;
     }
+    saveLock.current = true;
     const dbPayload: any = {
+      catalog_visible: catalogVisible,
       overview_content: overview,
       title: title.trim(),
       description: description.trim(),
       instructor: instructor.trim(),
       price: isFree ? 0 : Number(price) || 0,
       discount_price: isFree ? 0 : Number(discountPrice) > 0 ? Number(discountPrice) : null,
-      payment_enabled: paymentEnabled,
+      payment_enabled: isFree ? false : paymentEnabled,
       razorpay_payment_button_id: buttonId.trim() || null,
       duration,
       language,
@@ -165,9 +183,9 @@ export default function BatchesCMS({ onManageSyllabus }: BatchesCMSProps) {
       is_paid: !isFree,
       // Preserve archived/test-only state when editing an existing batch.
       ...(editBatch ? {} : { is_active: true }),
-      category: 'MPPSC',
+      category: editBatch?.category || 'MPPSC',
       custom_tag: customTag || null,
-      tags: ['MPPSC']
+      tags: testSeriesOnly ? seriesTags(editBatch?.tags || ['MPPSC']) : (editBatch?.tags || ['MPPSC'])
     };
 
     try {
@@ -183,7 +201,7 @@ export default function BatchesCMS({ onManageSyllabus }: BatchesCMSProps) {
         // Create batch
         const { error } = await supabase
           .from('batches')
-          .insert([dbPayload]);
+          .insert([{ ...dbPayload, id: creationId.current }]);
 
         if (error) throw error;
       }
@@ -194,18 +212,17 @@ export default function BatchesCMS({ onManageSyllabus }: BatchesCMSProps) {
       console.error('Save batch error:', err);
       setFormError(err.message || 'Failed to save batch. Please try again.');
     } finally {
+      saveLock.current = false;
       setSaving(false);
     }
   };
 
   const handleDelete = async (id: string) => {
-    if (!window.confirm('Are you absolutely sure you want to delete this batch? All subjects, chapters, and lectures inside it will be orphaned or deleted.')) return;
+    if (!window.confirm(testSeriesOnly ? 'Remove this series from sale? Existing students keep their access and records.' : 'Delete this batch and associated content?')) return;
 
     try {
-      const { error } = await supabase
-        .from('batches')
-        .delete()
-        .eq('id', id);
+      const query = supabase.from('batches');
+      const { error } = await (testSeriesOnly ? query.update({ catalog_visible: false }) : query.delete()).eq('id', id);
 
       if (error) throw error;
       fetchBatches();
@@ -219,7 +236,7 @@ export default function BatchesCMS({ onManageSyllabus }: BatchesCMSProps) {
     <div className="space-y-8 animate-fade-in">
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-3xl font-extrabold text-gray-900 tracking-tight">MPPSC Batches</h1>
+          <h1 className="text-3xl font-extrabold text-gray-900 tracking-tight">{testSeriesOnly ? 'Test Series' : 'MPPSC Batches'}</h1>
           <p className="text-gray-500 text-sm mt-1">Manage active prep programs and enrollment pricing</p>
         </div>
         <button
@@ -227,10 +244,13 @@ export default function BatchesCMS({ onManageSyllabus }: BatchesCMSProps) {
           className="inline-flex items-center gap-1.5 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white font-semibold rounded-2xl text-sm shadow-md shadow-indigo-600/10 transition-colors cursor-pointer"
         >
           <Plus className="w-4 h-4" />
-          Add Batch
+          {testSeriesOnly ? 'Add Test Series' : 'Add Batch'}
         </button>
       </div>
 
+      {!!formError && <p role="alert" className="text-red-700">{formError}</p>}
+      <button onClick={() => void fetchBatches()}>Refresh catalog</button>
+      {previewBatch && <div role="dialog" aria-modal="true" aria-label="Catalog preview" className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-6"><div className="bg-white rounded-2xl p-6 max-w-lg space-y-4"><button onClick={() => setPreviewBatch(null)}>Close preview</button><img src={previewBatch.thumbnailUrl} alt="" className="w-full h-48 object-cover" /><h2 className="text-2xl font-bold">{previewBatch.title}</h2><p className="whitespace-pre-wrap">{previewBatch.description}</p><p>{previewBatch.isFree ? 'Free' : `₹${previewBatch.discountPrice || previewBatch.price}`}</p><p>{previewBatch.duration} · {previewBatch.language}</p><p>{previewBatch.catalogVisible === false ? 'Draft / removed from sale' : 'Published'}</p></div></div>}
       {loading ? (
         <div className="flex items-center justify-center min-h-[300px]">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
@@ -260,7 +280,7 @@ export default function BatchesCMS({ onManageSyllabus }: BatchesCMSProps) {
                       <span className="bg-amber-50 text-amber-700 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase">Paid</span>
                     )}
                   </div>
-                  <h3 className="font-bold text-gray-900 text-base leading-tight mb-2">{batch.title}</h3>
+                  <h3 className="font-bold text-gray-900 text-base leading-tight mb-2">{batch.title}</h3><p>{batch.catalogVisible === false ? 'Not listed for sale' : 'Published'}</p>
                   <p className="text-gray-400 text-xs line-clamp-3 leading-relaxed">{batch.description}</p>
                 </div>
               </div>
@@ -272,7 +292,8 @@ export default function BatchesCMS({ onManageSyllabus }: BatchesCMSProps) {
                     {batch.isFree || batch.price === 0 ? 'Free' : `₹${batch.price}`}
                   </span>
                 </div>
-                 <div className="flex gap-1.5 items-center">
+                 <div className="flex gap-1.5 items-center flex-wrap">
+                  <button onClick={() => setPreviewBatch(batch)} className="p-2 text-indigo-700">Preview</button>
                   {onManageSyllabus && (
                     <button
                       onClick={() => onManageSyllabus(batch.id)}
@@ -293,7 +314,7 @@ export default function BatchesCMS({ onManageSyllabus }: BatchesCMSProps) {
                   <button
                     onClick={() => handleDelete(batch.id)}
                     className="p-2 bg-red-50 hover:bg-red-100 text-red-600 rounded-xl transition-colors cursor-pointer"
-                    title="Delete Batch"
+                    title={testSeriesOnly ? 'Remove from sale' : 'Delete Batch'}
                   >
                     <Trash2 className="w-4 h-4" />
                   </button>
@@ -310,7 +331,7 @@ export default function BatchesCMS({ onManageSyllabus }: BatchesCMSProps) {
           <div className="bg-white rounded-3xl max-w-lg w-full max-h-[90vh] overflow-y-auto shadow-2xl p-6 border border-gray-100">
             <div className="flex justify-between items-center mb-6">
               <h2 className="text-lg font-bold text-gray-900">
-                {editBatch ? 'Edit Batch details' : 'Create New Batch'}
+                {testSeriesOnly ? (editBatch ? 'Edit Test Series' : 'Create Test Series') : (editBatch ? 'Edit Batch details' : 'Create New Batch')}
               </h2>
               <button
                 disabled={saving || uploading}
@@ -329,6 +350,7 @@ export default function BatchesCMS({ onManageSyllabus }: BatchesCMSProps) {
             )}
 
             <form onSubmit={handleSubmit} className="space-y-4">
+              <label className="flex gap-2"><input type="checkbox" checked={catalogVisible} onChange={e => setCatalogVisible(e.target.checked)} /> Published in catalog (uncheck to remove from sale)</label>
               <div>
                 <label className="block text-xs font-semibold text-gray-500 mb-1">Batch Title</label>
                 <input
