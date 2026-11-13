@@ -2,11 +2,11 @@
 
 Last consolidated: 2026-11-09. Source/configuration reviewed locally; test/build/hosted evidence is historical unless explicitly stated. No live service inspection or application test rerun occurred in this documentation task.
 
-Standalone Vite/React static app with authenticated shell and Batches, Syllabus and Homepage CMS views. Selecting Content on a batch passes its ID into the syllabus editor. A separate legacy embedded web Admin exists; this folder documents the standalone panel.
+Standalone Vite/React static app with authenticated shell and Batches, Syllabus and Homepage CMS views. Selecting Content on a batch passes its ID into the syllabus editor. The standalone panel is the sole management UI; the embedded Web console was removed from local source November 12.
 
 ## Authorization
 
-Supabase Auth supplies session identity. App verifies server user, profile admin role and matching current token before showing CMS. Generation guards, cancellation/timeouts and deferred auth/visibility checks reject stale results. Logout locks the panel immediately for the tab and signs out locally. This does not revoke all sessions. Database/Storage policies remain authoritative against direct client requests.
+Supabase Auth supplies session identity. App verifies server user, profile admin role and matching current token before showing CMS. Generation guards, cancellation/timeouts and deferred auth/visibility checks reject stale results. Logout locks the panel immediately across same-origin tabs and reloads using a persistent local lock, and signs out locally. Only a successful explicit login releases the lock; failed login cannot reopen an old offline session. This does not revoke all sessions. Database/Storage policies remain authoritative against direct client requests.
 
 ## Data flow
 
@@ -27,3 +27,7 @@ Shared schema, catalog visibility, role policies and purchase/access rules are c
 ## Payment synchronization — 2026-11-12
 
 Follow the [canonical payment contract](../../C50-Project/main-brain/ARCHITECTURE.md). Web and direct Android share the backend purchase ledger and Supabase enrollments. The standalone Admin Payments view reads those records with administrator RLS, pagination and refresh. No client possesses the Razorpay secret; no parallel client-owned payment status writes were added.
+
+## Session privacy — 2026-11-13
+
+Admin retains authoritative Auth/profile/role verification. Logout persists across reloads and same-origin tabs, clears CMS state and invalidates delayed checks. New login waits for prior sign-out; only a successful password response proceeds to independent authorization. Local logout locks prevent cached identity from reopening the UI. Successful local-scope sign-out revokes the associated refresh session; already issued JWTs can remain valid until expiry. This is not immediate global token revocation. Shared contracts: [Web architecture](../../C50-Project/main-brain/ARCHITECTURE.md).

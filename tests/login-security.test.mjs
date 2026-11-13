@@ -29,7 +29,10 @@ test('CMS requires server user, admin role and matching current token', () => {
 });
 test('login has no embedded credentials or direct CMS authorization', () => {
   const source = readFileSync(new URL('../src/components/Login.tsx', import.meta.url), 'utf8');
-  assert.doesNotMatch(source, /admin123|admin@carrier50|Demo credentials|onLoginSuccess|console.error/);
+  assert.doesNotMatch(source, /admin123|admin@carrier50|Demo credentials|setSessionUser|console.error/);
+  const app = readFileSync(new URL('../src/App.tsx', import.meta.url), 'utf8');
+  assert.match(app, /await verify\(session, gate.current.invalidate\(\)\)/);
+  assert.match(source, /await onLoginSuccess\(data.session\)/);
   assert.match(source, /setPassword\(''\)/);
   assert.match(source, /submitting.current/);
   assert.match(source, /autoComplete="current-password"/);

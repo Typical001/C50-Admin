@@ -1,13 +1,15 @@
+import type { Session } from '@supabase/supabase-js';
 import React, { useState, useRef } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import { ShieldAlert, KeyRound, Mail, Sparkles } from 'lucide-react';
 
 interface LoginProps {
-  onLoginStart: () => void;
+  onLoginSuccess: (session: Session) => Promise<void>;
+  onLoginStart: () => Promise<void>;
   sessionError: string;
 }
 
-export default function Login({ onLoginStart, sessionError }: LoginProps) {
+export default function Login({ onLoginStart, onLoginSuccess, sessionError }: LoginProps) {
   const submitting = useRef(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -18,18 +20,20 @@ export default function Login({ onLoginStart, sessionError }: LoginProps) {
     e.preventDefault();
     if (submitting.current) return;
     submitting.current = true;
-    onLoginStart();
+
     setLoading(true);
     setError('');
 
     try {
+      await onLoginStart();
       const { data, error: authError } = await supabase.auth.signInWithPassword({
         email: email.trim(),
         password,
       });
 
       if (authError) throw authError;
-      if (!data.user) throw new Error('No user data returned');
+      if (!data.session) throw new Error('No session returned');
+      await onLoginSuccess(data.session);
 
       // App owns verification; a successful password response alone grants no CMS access.
     } catch {

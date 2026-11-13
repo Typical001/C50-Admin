@@ -21,11 +21,12 @@ export default function App() {
   const [authError, setAuthError] = useState('');
   const gate = useRef(createVerificationGate());
   const blocked = useRef(false);
+  const signingOut = useRef<Promise<unknown> | null>(null);
   const mounted = useRef(false);
   const controller = useRef<AbortController | null>(null);
   const lock = () => {
     blocked.current = true;
-    sessionStorage.setItem('c50-admin-signed-out', '1');
+    localStorage.setItem('c50-admin-signed-out', '1');
     gate.current.invalidate();
     controller.current?.abort();
   };
@@ -69,7 +70,10 @@ export default function App() {
   useEffect(() => {
     const verificationGate = gate.current;
     mounted.current = true;
-    blocked.current = sessionStorage.getItem('c50-admin-signed-out') === '1';
+    if (sessionStorage.getItem('c50-admin-signed-out')) {
+      localStorage.setItem('c50-admin-signed-out', '1'); sessionStorage.removeItem('c50-admin-signed-out');
+    }
+    blocked.current = localStorage.getItem('c50-admin-signed-out') === '1';
     let scheduled: ReturnType<typeof setTimeout>;
     const schedule = (session: Session | null) => {
       const ticket = gate.current.invalidate();
@@ -82,7 +86,7 @@ export default function App() {
       scheduled = setTimeout(() => { void verify(session, ticket); }, 0);
     };
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      schedule(session);
+      if (!blocked.current) schedule(session);
     });
     const initial = gate.current.invalidate();
     void supabase.auth.getSession().then(({ data, error }) => {
@@ -99,11 +103,15 @@ export default function App() {
         }).catch(() => { if (mounted.current && gate.current.isCurrent(ticket)) setLoading(false); });
       }
     };
+    const externalLogout = (event: StorageEvent) => { if (event.key === 'c50-admin-signed-out' && event.newValue) { lock(); setSessionUser(null); setLoading(false); } };
+    const restore = (event: PageTransitionEvent) => { if (event.persisted) refresh(); };
+    window.addEventListener('storage', externalLogout); window.addEventListener('pageshow', restore);
     document.addEventListener('visibilitychange', refresh);
     return () => {
       mounted.current = false; verificationGate.invalidate(); controller.current?.abort();
       clearTimeout(scheduled); subscription.unsubscribe();
       document.removeEventListener('visibilitychange', refresh);
+      window.removeEventListener('storage', externalLogout); window.removeEventListener('pageshow', restore);
     };
   }, [verify]);
 
@@ -111,14 +119,17 @@ export default function App() {
     lock(); setSessionUser(null); setLoading(false);
     setActiveView('dashboard'); setSelectedBatchIdForSyllabus(undefined);
     try {
-      const { error } = await supabase.auth.signOut({ scope: 'local' });
+      signingOut.current = supabase.auth.signOut({ scope: 'local' });
+      const { error } = await signingOut.current as { error: unknown };
       if (error) throw error;
       setAuthError('');
     } catch { setAuthError('This panel is locked. Server sign-out could not be confirmed; reconnect and sign in again.'); }
+    finally { signingOut.current = null; }
   };
-  const prepareLogin = () => {
+  const prepareLogin = async () => {
+    if (signingOut.current) await signingOut.current.catch(() => {});
     gate.current.invalidate(); controller.current?.abort();
-    blocked.current = false; sessionStorage.removeItem('c50-admin-signed-out');
+    lock();
     setSessionUser(null); setAuthError('');
     setActiveView('dashboard'); setSelectedBatchIdForSyllabus(undefined);
   };
@@ -132,7 +143,10 @@ export default function App() {
   }
 
   if (!sessionUser) {
-    return <Login onLoginStart={prepareLogin} sessionError={authError} />;
+    return <Login onLoginSuccess={async session => {
+      blocked.current = false; localStorage.removeItem('c50-admin-signed-out');
+      setLoading(true); await verify(session, gate.current.invalidate());
+    }} onLoginStart={prepareLogin} sessionError={authError} />;
   }
 
   const menuItems = [
