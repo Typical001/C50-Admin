@@ -45,3 +45,8 @@ Limits: valid URL syntax cannot prove the target is a PDF or viewable by a stude
 **Verified:** Admin TypeScript/production build passed. All 6 existing login/upload tests passed. Local Edge fixtures passed verified login, cross-tab offline logout, failed re-login followed by reload, and account isolation. Actual hosted authorization remains a release check.
 
 **Release:** No deployment, Supabase configuration/schema/data change, or new APK was performed. Deploy Web/backend together, deploy Admin and rebuild Android separately. Existing custom-token website sessions must sign in again. Physical-device and real-account production checks remain pending.
+
+
+## Homepage app promotion — 2026-11-14
+
+Implemented: Homepage CMS now edits the app promotion visibility, text, phone labels and per-store Hidden/Coming Soon/Available state. Available links require HTTPS store listing URLs without credentials. The unfinished email subscription section is removed. Failed Admin settings loads block saving and offer Retry. Both stores default to Coming Soon with no links. Supabase migration applied November 14; hosted application rollout pending verification.

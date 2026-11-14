@@ -1,9 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabaseClient';
-import { HomepageSettings } from '../types';
-import { Plus, Trash2, Save, Sparkles, PlusCircle, User, Upload, ArrowUp, ArrowDown } from 'lucide-react';
+import AppPromotionEditor from './AppPromotionEditor';
+import { defaultAppPromotion, readAppPromotion, validateAppPromotion } from '../lib/appPromotion';
+import { Trash2, Save, Sparkles, PlusCircle, User, Upload, ArrowUp, ArrowDown } from 'lucide-react';
 
 export default function HomepageCMS() {
+  const [appPromotion, setAppPromotion] = useState(defaultAppPromotion);
+  const [loadError, setLoadError] = useState(false);
   const [heroTitle, setHeroTitle] = useState('');
   const [heroSubtitle, setHeroSubtitle] = useState('');
   const [faqs, setFaqs] = useState<{ question: string; answer: string }[]>([]);
@@ -25,6 +28,7 @@ export default function HomepageCMS() {
   const fetchHomepageSettings = async () => {
     try {
       setLoading(true);
+      setLoadError(false);
       const { data, error } = await supabase
         .from('homepage_settings')
         .select('*')
@@ -35,6 +39,7 @@ export default function HomepageCMS() {
         throw error;
       }
 
+      setAppPromotion(readAppPromotion(data?.app_promotion));
       if (data) {
         setHeroTitle(data.hero_title || '');
         setHeroSubtitle(data.hero_subtitle || '');
@@ -58,6 +63,7 @@ export default function HomepageCMS() {
         setShowFaculty(true);
       }
     } catch (err) {
+      setLoadError(true);
       console.error('Failed to load homepage settings:', err);
     } finally {
       setLoading(false);
@@ -170,6 +176,9 @@ export default function HomepageCMS() {
   };
 
   const handleSave = async () => {
+    if (loading || loadError || saving) return;
+    const validationError = validateAppPromotion(appPromotion);
+    if (validationError) { setMsg('Error: ' + validationError); return; }
     setSaving(true);
     setMsg('');
 
@@ -178,6 +187,7 @@ export default function HomepageCMS() {
         .from('homepage_settings')
         .upsert({
           id: 'mppsc_homepage',
+          app_promotion: appPromotion,
           hero_title: heroTitle.trim(),
           hero_subtitle: heroSubtitle.trim(),
           faqs: faqs.filter(f => f.question.trim() && f.answer.trim()),
@@ -208,6 +218,8 @@ export default function HomepageCMS() {
     );
   }
 
+  if (loadError) return <div role="alert" className="p-6 rounded-2xl bg-red-50 text-red-800">Could not load homepage settings. Saving is disabled to protect existing content. <button type="button" onClick={fetchHomepageSettings} className="underline font-bold">Retry</button></div>;
+
   return (
     <div className="space-y-8 animate-fade-in pb-12">
       <div className="flex justify-between items-center">
@@ -230,6 +242,9 @@ export default function HomepageCMS() {
           {msg}
         </div>
       )}
+
+      <AppPromotionEditor value={appPromotion} onChange={setAppPromotion} disabled={saving} />
+      <div className="p-5 rounded-2xl border border-gray-200 bg-gray-50 text-sm text-gray-600"><h2 className="font-bold text-gray-900">Email subscriptions: disabled</h2><p>The homepage subscription section is hidden until email collection, consent, delivery and unsubscribe functionality are implemented.</p></div>
 
       {/* Homepage Sections Management */}
       <div className="bg-white rounded-3xl border border-gray-100 p-6 shadow-sm space-y-4">

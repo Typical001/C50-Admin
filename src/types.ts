@@ -1,3 +1,4 @@
+import type { AppPromotion } from './lib/appPromotion';
 export type UserRole = 'student' | 'admin' | 'teacher';
 
 export interface User {
@@ -79,6 +80,7 @@ export interface Announcement {
 }
 
 export interface HomepageSettings {
+  app_promotion?: AppPromotion;
   id: string;
   hero_title: string;
   hero_subtitle: string;
