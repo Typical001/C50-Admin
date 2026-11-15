@@ -1,3 +1,4 @@
+import GooglePlayProductEditor from './GooglePlayProductEditor';
 import React, { useEffect, useState, useRef } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import { isTestSeries, seriesTags } from '../lib/testSeries';
@@ -436,6 +437,7 @@ export default function BatchesCMS({ onManageSyllabus, testSeriesOnly = false }:
                 {uploading ? 'Uploading image...' : saving ? 'Saving...' : editBatch ? 'Update Batch Details' : 'Create Batch'}
               </button>
             </form>
+            {editBatch && !isFree && <GooglePlayProductEditor key={editBatch.id} batchId={editBatch.id} />}
             {editBatch && !isFree && (Number(discountPrice) > 0 ? Number(discountPrice) : Number(price)) === 1000 &&
               <PaymentButtonTest key={editBatch.id + buttonId} buttonId={buttonId.trim()} />}
           </div>

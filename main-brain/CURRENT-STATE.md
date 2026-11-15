@@ -1,5 +1,14 @@
 # Current state — Admin CMS
 
+## Google Play Billing rollout — 2026-11-15
+
+Implemented locally: Android native Play checkout/restore with store prices; backend account-bound Google verification and post-commit acknowledgement; shared cross-provider access; Admin immutable product mapping and provider-labelled ledger; Web ledger provider display. Razorpay remains the website/direct-APK provider.
+
+Applied: Supabase migrations 20261115062543 and 20261115062749. Google tokens/account bindings are server-only; current two paid-batch mappings remain disabled. Tested: Web TypeScript/build, 21 payment + 6 session regressions, 2 Google/isolated SQL tests; Admin lint (existing warnings) and build; Android TypeScript + 44 tests.
+
+Not complete: Google Cloud/Play credentials, RTDN/scheduler configuration, product activation, verified AAB upload/Internal release, physical-device acceptance, Google financial totals/refund catch-up and production release. Build cda43959-bd39-4a2b-abf2-88fc12678c27 (version code 5) requested; outcome pending. No real charge or production Play release. See [shared runbook](../../C50-Project/docs/google-play-billing.md).
+
+
 Last consolidated: 2026-11-09. Source/configuration reviewed locally; test/build/hosted evidence is historical unless explicitly stated. No live service inspection or application test rerun occurred in this documentation task.
 
 | Area | Implemented | Recorded tests | Deployment / uncertainty |

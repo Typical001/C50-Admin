@@ -49,3 +49,7 @@ Release Web and backend together: the new frontend needs GET /api/auth/me, and t
 ## Homepage app promotion — 2026-11-14
 
 Open Homepage CMS > Mobile App Promotion. Edit copy and visibility; choose Hidden, Coming Soon or Available for each store. Available requires the real HTTPS listing URL. Save Settings and reload the public website. No deployment is needed for later content edits. Email subscriptions remain disabled until consent, collection, delivery and unsubscribe are implemented. Do not publish fixture store links. Apply the migration before updated Web/Admin releases. Focused checks: Web npx tsx --test server/app-promotion.test.ts; Admin node --experimental-strip-types --test tests/app-promotion.test.mjs.
+
+## Google Play Billing — 2026-11-15
+
+See the [canonical Google Play contract and rollout workflow](../../C50-Project/docs/google-play-billing.md). Paid Play batches use verified non-consumable Google purchases; website/direct APK retains Razorpay. Shared enrollment is server-owned. Google tokens are private, product mappings immutable, store prices come from Google. Checkout remains disabled until configuration and Internal acceptance.

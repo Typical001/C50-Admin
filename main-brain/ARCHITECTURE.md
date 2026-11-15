@@ -36,3 +36,7 @@ Admin retains authoritative Auth/profile/role verification. Logout persists acro
 ## Homepage app promotion — 2026-11-14
 
 homepage_settings.app_promotion is an additive non-null JSONB object containing visible, badge, heading, description, phone_name, phone_caption and google_play/app_store {status,url}. Web GET /api/homepage uses safe defaults and no-store; administrator-only PUT validates partial updates and preserves omitted fields. Standalone Admin saves through authenticated Supabase; existing RLS permits public reads and authoritative is_admin writes. A security-invoker CHECK helper enforces structure/text bounds/store URL restrictions. Client validators are identical copies for independent deployments. External available links use noopener noreferrer. No subscriber table or sending service exists.
+
+## Google Play Billing — 2026-11-15
+
+See the [canonical Google Play contract and rollout workflow](../../C50-Project/docs/google-play-billing.md). Paid Play batches use verified non-consumable Google purchases; website/direct APK retains Razorpay. Shared enrollment is server-owned. Google tokens are private, product mappings immutable, store prices come from Google. Checkout remains disabled until configuration and Internal acceptance.
