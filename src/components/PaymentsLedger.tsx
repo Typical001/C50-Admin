@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { supabase } from '../lib/supabaseClient';
 
 type Payment = {
-  payment_gateway: string; google_is_test: boolean | null; id: string; user_id: string; batch_id: string; amount: number; amount_paise: number | null;
+  google_order_total: number | null; google_order_currency: string | null; google_order_state: string | null; payment_gateway: string; google_is_test: boolean | null; id: string; user_id: string; batch_id: string; amount: number; amount_paise: number | null;
   currency: string | null; status: string; gateway_mode: string | null;
   razorpay_order_id: string | null; razorpay_payment_id: string | null;
   gateway_order_id: string | null; gateway_payment_id: string | null; failure_code: string | null;
@@ -28,7 +28,7 @@ export default function PaymentsLedger() {
     try {
       // RLS authorizes this read. Never request signatures, provider payloads or credentials.
       let query = supabase.from('payments').select(
-        'payment_gateway,google_is_test,id,user_id,batch_id,amount,amount_paise,currency,status,gateway_mode,razorpay_order_id,razorpay_payment_id,verified_at,created_at,payment_method,gateway_order_id,gateway_payment_id,failure_code',
+        'google_order_total,google_order_currency,google_order_state,payment_gateway,google_is_test,id,user_id,batch_id,amount,amount_paise,currency,status,gateway_mode,razorpay_order_id,razorpay_payment_id,verified_at,created_at,payment_method,gateway_order_id,gateway_payment_id,failure_code',
         { count: 'exact' },
       ).order('created_at', { ascending: false }).order('id', { ascending: false });
       if (status) query = query.eq('status', status);
@@ -80,8 +80,8 @@ export default function PaymentsLedger() {
         </tr></thead><tbody>{rows.map(row => <tr key={row.id} className="border-t border-gray-100 align-top">
           <td className="p-4">{names[row.user_id] || row.user_id}<div className="text-xs text-gray-500 break-all">{row.id}</div></td>
           <td className="p-4">{titles[row.batch_id] || row.batch_id}</td>
-          <td className="p-4 whitespace-nowrap">{row.payment_gateway === 'google_play' ? 'See Google Play order' : `${row.currency || 'INR'} ${((row.amount_paise ?? Math.round(Number(row.amount) * 100)) / 100).toFixed(2)}`}<div className="text-xs text-gray-500">{row.payment_method || '—'}</div></td>
-          <td className="p-4">{row.status}<div className="font-semibold">{row.payment_gateway === 'google_play' ? (row.google_is_test ? 'Google Play · Test' : 'Google Play · Live') : row.gateway_mode || 'Legacy / unknown'}</div><div className="text-xs text-gray-500">{row.failure_code}</div></td>
+          <td className="p-4 whitespace-nowrap">{row.payment_gateway === 'google_play' ? (row.google_order_total == null ? 'Total pending verification' : `${row.google_order_currency} ${Number(row.google_order_total).toFixed(2)}`) : `${row.currency || 'INR'} ${((row.amount_paise ?? Math.round(Number(row.amount) * 100)) / 100).toFixed(2)}`}<div className="text-xs text-gray-500">{row.payment_method || '—'}</div></td>
+          <td className="p-4">{row.status}<div className="font-semibold">{row.payment_gateway === 'google_play' ? (row.google_is_test ? 'Google Play · Test' : 'Google Play · Live') : row.gateway_mode || 'Legacy / unknown'}</div><div className="text-xs text-gray-500">{row.google_order_state || row.failure_code}</div></td>
           <td className="p-4 text-xs break-all">{row.razorpay_order_id || row.gateway_order_id || 'No order attached'}<div>{row.razorpay_payment_id || row.gateway_payment_id || 'No captured payment recorded'}</div></td>
           <td className="p-4 text-xs whitespace-nowrap">{date(row.created_at)}<div>Verified: {date(row.verified_at)}</div></td>
         </tr>)}</tbody></table>
