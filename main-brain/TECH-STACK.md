@@ -46,3 +46,8 @@ Run in this app directory after installing dependencies with `npm ci`.
 Browser variables: `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`. Administrator authority comes from authenticated identity/profile and database policies, never a bundled server secret.
 
 Keep real values in ignored local environment files or the deployment platform. All VITE_/EXPO_PUBLIC_ values are client-visible; no backend secrets belong there. Package installation is not evidence of a configured product feature. See [workflows](WORKFLOWS.md) for release commands and checks.
+
+
+## Premium Notes additions — 2026-11-18
+
+No new application dependency. Uses existing React/React Native, Express and Supabase clients. Web `npm run test:premium-notes` runs focused tests; deployment `test:payments` includes them. Browser fixture validation uses a separate temporary Playwright installation, not a runtime dependency. EAS production explicitly configures EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY (public client configuration; values omitted).

@@ -17,3 +17,8 @@ Source/evidence: [architecture](ARCHITECTURE.md), [current state](CURRENT-STATE.
 ## Test Series decisions — 2026-11-12
 
 User selected catalog synchronization only and removal that preserves existing access. Reuse one Supabase batch row per series rather than creating competing catalogs. Keep exam category independent from the reserved Test Series tag; recognize historical category/custom-tag markers. Use a separate listed-for-sale flag, not `is_active`, because the latter gates learning access. New series start as drafts until the Admin explicitly publishes them. All new enrollments go through the existing authenticated server API; browser/mobile clients cannot insert enrollment rows directly. Existing course purchase restrictions in Play remain unchanged.
+
+
+## 2026-11-18 — External Premium Notes requests
+
+The owner explicitly selected a configurable external Google Form/website that collects payment proof, manual purchase verification and external PDF delivery, including Buy in the Play/AAB app. This is implemented separately from batch billing; it does not establish Google Play program eligibility, waive platform requirements or authorize store submission. No PDF hosting, Google Forms import or automatic external payment verification is implemented. Pending is a request state, Purchased is an audited administrator decision, and delivery is tracked separately.

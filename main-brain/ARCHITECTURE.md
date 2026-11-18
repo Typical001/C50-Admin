@@ -40,3 +40,8 @@ homepage_settings.app_promotion is an additive non-null JSONB object containing 
 ## Google Play Billing — 2026-11-15
 
 See the [canonical Google Play contract and rollout workflow](../../C50-Project/docs/google-play-billing.md). Paid Play batches use verified non-consumable Google purchases; website/direct APK retains Razorpay. Shared enrollment is server-owned. Google tokens are private, product mappings immutable, store prices come from Google. Checkout remains disabled until configuration and Internal acceptance.
+
+
+## Premium Notes contract — 2026-11-18
+
+Premium Notes uses dedicated products, requests and append-only decision events through the authenticated Express API; it never grants batch enrollments or fabricates gateway payments. Customers see only their own status. External delivery remains with the seller. Android Play and direct variants both include the configured external Buy flow; batch Razorpay/Play gates remain separate. [canonical Premium Notes runbook](../../C50-Project/docs/premium-notes.md) owns endpoints, constraints and permission details.

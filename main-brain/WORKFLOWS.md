@@ -53,3 +53,8 @@ Open Homepage CMS > Mobile App Promotion. Edit copy and visibility; choose Hidde
 ## Google Play Billing — 2026-11-15
 
 See the [canonical Google Play contract and rollout workflow](../../C50-Project/docs/google-play-billing.md). Paid Play batches use verified non-consumable Google purchases; website/direct APK retains Razorpay. Shared enrollment is server-owned. Google tokens are private, product mappings immutable, store prices come from Google. Checkout remains disabled until configuration and Internal acceptance.
+
+
+## Premium Notes workflow — 2026-11-18
+
+Admin publishes a listing with a genuine HTTPS checkout/form URL; customer signs in, opens details and taps Buy. Pending records a checkout request, not a payment. Admin independently matches form/payment records, records approval or rejection with a reason, and tracks delivery separately. Reopen retries use the same request. Archive listings instead of deleting history. Clients refresh on return and every 30 seconds while visible. See [canonical Premium Notes runbook](../../C50-Project/docs/premium-notes.md) for testing, safe rollout and the Play publication boundary.
