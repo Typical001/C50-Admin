@@ -5,12 +5,13 @@ import { createVerificationGate } from './lib/adminSession';
 import Login from './components/Login';
 import Dashboard from './components/Dashboard';
 import PaymentsLedger from './components/PaymentsLedger';
+import PremiumNotesCMS from './components/PremiumNotesCMS';
 import BatchesCMS from './components/BatchesCMS';
 import SyllabusCMS from './components/SyllabusCMS';
 import HomepageCMS from './components/HomepageCMS';
 import { LayoutDashboard, BookOpen, GraduationCap, Sparkles, LogOut, User as UserIcon } from 'lucide-react';
 
-type AdminView = 'dashboard' | 'batches' | 'syllabus' | 'homepage' | 'tests' | 'payments';
+type AdminView = 'dashboard' | 'batches' | 'syllabus' | 'homepage' | 'tests' | 'payments' | 'premium-notes';
 
 export default function App() {
   const [sessionUser, setSessionUser] = useState<(User & { name: string }) | null>(null);
@@ -155,6 +156,7 @@ export default function App() {
     { view: 'syllabus' as AdminView, label: 'Batch Content Manager', icon: GraduationCap },
     { view: 'tests' as AdminView, label: 'Test Series', icon: BookOpen },
     { view: 'payments' as AdminView, label: 'Payments', icon: BookOpen },
+    { view: 'premium-notes' as AdminView, label: 'Premium Notes', icon: BookOpen },
     { view: 'homepage' as AdminView, label: 'Homepage CMS', icon: Sparkles },
   ];
 
@@ -232,6 +234,7 @@ export default function App() {
         )}
         {activeView === 'homepage' && <HomepageCMS />}
         {activeView === 'payments' && <PaymentsLedger />}
+        {activeView === 'premium-notes' && <PremiumNotesCMS />}
       </main>
     </div>
   );
