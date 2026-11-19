@@ -21,6 +21,9 @@ export default function PaymentsLedger() {
   const [mode, setMode] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [working, setWorking] = useState<string | null>(null);
+  const [feedback, setFeedback] = useState('');
+  const actionLock = useRef(false);
   const generation = useRef(0);
   const refresh = useCallback(async () => {
     const ticket = ++generation.current;
@@ -59,6 +62,29 @@ export default function PaymentsLedger() {
     window.addEventListener('focus', visibleRefresh);
     return () => { generation.current++; clearInterval(timer); window.removeEventListener('focus', visibleRefresh); };
   }, [refresh]);
+  async function manage(row: Payment, action: 'reconcile' | 'close-test') {
+    if (actionLock.current) return;
+    if (action === 'close-test' && !window.confirm(
+      `Check receipt ${row.id} in Razorpay Test mode first. Have you confirmed there is no payment? Closing records this attempt as failed and keeps its history.`
+    )) return;
+    actionLock.current = true;
+    setWorking(row.id); setFeedback('');
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('Sign in again to manage payments.');
+      const base = (import.meta.env.VITE_API_URL || 'https://c50-web.onrender.com').replace(/\/$/, '');
+      const response = await fetch(`${base}/api/admin/payments/${row.id}/${action}`, {
+        method: 'POST', headers: { Authorization: `Bearer ${session.access_token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify(action === 'close-test' ? { confirmedNoTestPayment: true } : {}),
+        signal: AbortSignal.timeout(45000),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || 'Payment update failed.');
+      setFeedback(result.status === 'pending' ? 'Still pending. Razorpay has no verified capture for this receipt.' :
+        action === 'close-test' ? 'Test attempt closed and recorded as failed.' : `Verified status: ${result.status}.`);
+    } catch (e) { setFeedback(e instanceof Error ? e.message : 'Unable to check payment.'); }
+    finally { await refresh(); actionLock.current = false; setWorking(null); }
+  }
   return (
     <section className="space-y-6 min-w-0">
       <div><h1 className="text-2xl font-bold text-gray-900">Payments</h1>
@@ -74,9 +100,10 @@ export default function PaymentsLedger() {
         <span className="text-sm text-gray-500">{count} records</span>
       </div>
       {error && <p role="alert" className="text-red-600">{error}</p>}
+      {feedback && <p role="status">{feedback}</p>}
       <div className="overflow-x-auto bg-white rounded-xl border border-gray-100">
         <table className="w-full text-sm text-left"><thead className="bg-gray-50"><tr>
-          {['Customer / purchase', 'Batch / test series', 'Amount', 'Status / mode', 'Provider references', 'Created / verified'].map(label => <th key={label} className="p-4">{label}</th>)}
+          {['Customer / purchase', 'Batch / test series', 'Amount', 'Status / mode', 'Provider references', 'Created / verified', 'Manage'].map(label => <th key={label} className="p-4">{label}</th>)}
         </tr></thead><tbody>{rows.map(row => <tr key={row.id} className="border-t border-gray-100 align-top">
           <td className="p-4">{names[row.user_id] || row.user_id}<div className="text-xs text-gray-500 break-all">{row.id}</div></td>
           <td className="p-4">{titles[row.batch_id] || row.batch_id}</td>
@@ -84,6 +111,12 @@ export default function PaymentsLedger() {
           <td className="p-4">{row.status}<div className="font-semibold">{row.payment_gateway === 'google_play' ? (row.google_is_test ? 'Google Play · Test' : 'Google Play · Live') : row.gateway_mode || 'Legacy / unknown'}</div><div className="text-xs text-gray-500">{row.google_order_state || row.failure_code}</div></td>
           <td className="p-4 text-xs break-all">{row.razorpay_order_id || row.gateway_order_id || 'No order attached'}<div>{row.razorpay_payment_id || row.gateway_payment_id || 'No captured payment recorded'}</div></td>
           <td className="p-4 text-xs whitespace-nowrap">{date(row.created_at)}<div>Verified: {date(row.verified_at)}</div></td>
+          <td className="p-4">{row.status === 'pending' && row.payment_gateway === 'razorpay' && <div className="grid gap-2">
+            <button disabled={!!working} className="text-indigo-700 underline" onClick={() => void manage(row, 'reconcile')}>{working === row.id ? 'Checking…' : 'Check with Razorpay'}</button>
+            {row.gateway_mode === 'test' && !row.verified_at && !row.gateway_order_id && !row.gateway_payment_id &&
+              !row.razorpay_order_id && !row.razorpay_payment_id && Date.parse(row.created_at) < Date.now() - 86400000 &&
+              <button disabled={!!working} className="text-gray-700 underline" onClick={() => void manage(row, 'close-test')}>Close test attempt</button>}
+          </div>}</td>
         </tr>)}</tbody></table>
         {!loading && !error && !rows.length && <p className="p-6 text-gray-500">No payments match these filters.</p>}
       </div>
